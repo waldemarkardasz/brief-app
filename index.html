@@ -33,6 +33,11 @@
   @keyframes obrot{to{transform:rotate(360deg)}}
   @media (prefers-reduced-motion:reduce){.ik.kreci svg{animation:none;opacity:.5}}
 
+  .dni{display:flex;align-items:center;justify-content:space-between;padding:2px 8px;border-bottom:1px solid #1B1F26}
+  .dni span{display:block;font-size:13px;font-weight:600;color:#C9CED6}
+  .dni span::first-letter{text-transform:uppercase}
+  .dni .ik{width:44px;height:40px}
+  .dni .ik:disabled{opacity:.22}
   #ramka{display:block;width:100%;border:0;background:#0E1014;min-height:60dvh}
   .pusto{padding:70px 28px;text-align:center;color:#8D95A1;font-size:14px;line-height:1.6}
 
@@ -81,6 +86,11 @@
       <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg>
     </button>
   </header>
+  <nav class="dni" aria-label="Historia raportów">
+    <button id="wstecz" class="ik" aria-label="Dzień wcześniej"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <span id="ktory-dzien">—</span>
+    <button id="naprzod" class="ik" aria-label="Dzień później"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+  </nav>
   <iframe id="ramka" title="Raport" sandbox="allow-same-origin" hidden></iframe>
   <div id="pusto" class="pusto" hidden></div>
 </div>
