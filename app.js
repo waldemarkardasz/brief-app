@@ -12,10 +12,10 @@
 const API = 'https://api.github.com';
 const REPO = 'waldemarkardasz/garmin-brief';
 const KATALOG = 'karty';
-const WERSJA = '1.1';
+const WERSJA = '1.2';
 const STREFA = 'Europe/Warsaw';
 const ILE_W_PAMIECI = 45;
-const K = { token: 'brief.token', dni: 'brief.dni', karta: 'brief.karta.' };
+const K = { token: 'brief.token', dni: 'brief.dni', karta: 'brief.karta.', kom: 'brief.kom.' };
 
 const $ = (id) => document.getElementById(id);
 const ulotne = {};   // zapas, gdyby pamięć przeglądarki była niedostępna
@@ -67,11 +67,81 @@ function ladnaData(iso) {
   return d.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
+/* ---------- komentarz do nocy ---------- */
+
+function komentarze(data) {
+  try { return JSON.parse(pamiec(K.kom + data) || '[]'); } catch (e) { return []; }
+}
+
+function odswiezKomentarz() {
+  const lista = biezacy ? komentarze(biezacy) : [];
+  const pole = $('kom-zapisane');
+  pole.hidden = !lista.length;
+  pole.textContent = '';
+  if (lista.length) {
+    const b = document.createElement('b');
+    b.textContent = 'TWÓJ KOMENTARZ DO NOCY';
+    pole.appendChild(b);
+    pole.appendChild(document.createTextNode(lista.join('\n')));
+  }
+  $('kom-otworz').textContent = lista.length ? 'Dopisz do komentarza' : 'Dodaj komentarz do nocy';
+  $('kom-otworz').hidden = !biezacy;
+  $('kom-pole').hidden = true;
+}
+
+async function zapiszKomentarz() {
+  const tekst = $('kom-tekst').value.trim();
+  if (!tekst || !biezacy) return;
+  const dzien = biezacy;
+  const blad = $('kom-blad');
+  const przycisk = $('kom-zapisz');
+  blad.hidden = true;
+  przycisk.disabled = true;
+  przycisk.textContent = 'Zapisuję…';
+  try {
+    // Komentarz idzie jako zgłoszenie w prywatnym repozytorium; stamtąd
+    // automat dopisuje go do notatek, które czyta poranna sesja.
+    const odp = await fetch(`${API}/repos/${REPO}/issues`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${pamiec(K.token)}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      body: JSON.stringify({ title: `noc ${dzien}`, body: tekst }),
+    });
+    if (odp.status === 201) {
+      const lista = komentarze(dzien);
+      lista.push(tekst);
+      pamiec(K.kom + dzien, JSON.stringify(lista));
+      $('kom-tekst').value = '';
+      odswiezKomentarz();
+    } else if (odp.status === 401) {
+      blad.textContent = 'Token wygasł albo jest błędny. Wklej nowy w ustawieniach.';
+      blad.hidden = false;
+    } else if (odp.status === 403 || odp.status === 404 || odp.status === 410) {
+      blad.textContent = 'Token nie ma prawa do komentarzy. W GitHubie dodaj mu uprawnienie „Issues: Read and write" dla garmin-brief.';
+      blad.hidden = false;
+    } else {
+      blad.textContent = `Nie udało się zapisać (błąd ${odp.status}). Spróbuj ponownie.`;
+      blad.hidden = false;
+    }
+  } catch (e) {
+    blad.textContent = 'Brak połączenia. Komentarz nie został zapisany — spróbuj ponownie.';
+    blad.hidden = false;
+  } finally {
+    przycisk.disabled = false;
+    przycisk.textContent = 'Zapisz';
+  }
+}
+
 function odswiezNawigacje() {
   const i = dni.indexOf(biezacy);
   $('wstecz').disabled = i <= 0;
   $('naprzod').disabled = i < 0 || i >= dni.length - 1;
   $('ktory-dzien').textContent = biezacy ? ladnaData(biezacy) : '—';
+  odswiezKomentarz();
   if (!biezacy) return;
   if (biezacy === dzisIso()) ustawStan('dzisiejszy');
   else if (i === dni.length - 1) ustawStan('dzisiejszy jeszcze nie gotowy', true);
@@ -226,7 +296,9 @@ function przesun(o) {
 function podepnijGesty(cel) {
   let x0 = null, y0 = null;
   cel.addEventListener('touchstart', (e) => {
-    if (e.touches.length !== 1) { x0 = null; return; }
+    // W polu tekstowym i w oknach palec służy do pisania i zaznaczania, nie do zmiany dnia.
+    const wPolu = e.target && e.target.closest && e.target.closest('textarea,input,dialog');
+    if (e.touches.length !== 1 || wPolu) { x0 = null; return; }
     x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
   }, { passive: true });
   cel.addEventListener('touchend', (e) => {
@@ -260,6 +332,15 @@ $('odswiez').addEventListener('click', () => odswiez());
 $('wstecz').addEventListener('click', () => przesun(-1));
 $('naprzod').addEventListener('click', () => przesun(1));
 podepnijGesty(document);
+
+$('kom-otworz').addEventListener('click', () => {
+  $('kom-pole').hidden = false;
+  $('kom-otworz').hidden = true;
+  $('kom-blad').hidden = true;
+  $('kom-tekst').focus();
+});
+$('kom-anuluj').addEventListener('click', odswiezKomentarz);
+$('kom-zapisz').addEventListener('click', zapiszKomentarz);
 
 $('ustawienia').addEventListener('click', () => {
   $('okno-opis').textContent =
