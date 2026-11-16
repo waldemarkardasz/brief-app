@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- Aplikacja rozmawia wyłącznie z api.github.com i nie wykonuje żadnych
+     skryptów poza własnym plikiem app.js. Token nie ma dokąd wyciec. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.github.com; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; frame-src 'self' about:; base-uri 'none'; form-action 'none'">
+<meta name="theme-color" content="#0E1014">
+<meta name="robots" content="noindex,nofollow">
+<title>Poranny brief</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="ikona-192.png">
+<link rel="apple-touch-icon" href="ikona-192.png">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#0E1014;color:#F2F4F7;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  body{min-height:100dvh;overscroll-behavior-y:contain}
+  [hidden]{display:none!important}
+  button{font:inherit;color:inherit;cursor:pointer}
+
+  .pasek{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;
+    padding:calc(10px + env(safe-area-inset-top)) 14px 10px 20px;
+    background:rgba(14,16,20,.92);backdrop-filter:blur(10px);border-bottom:1px solid #1B1F26}
+  .pasek .tyt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .pasek b{font-size:15px;font-weight:700;letter-spacing:-.01em}
+  .pasek small{font-size:11.5px;color:#8D95A1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pasek small.uwaga{color:#C8A86E}
+  .ik{width:42px;height:42px;border:0;border-radius:12px;background:transparent;display:grid;place-items:center}
+  .ik:active{background:#1B1F26}
+  .ik svg{width:21px;height:21px;stroke:#B6BDC8;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .ik.kreci svg{animation:obrot .9s linear infinite}
+  @keyframes obrot{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.ik.kreci svg{animation:none;opacity:.5}}
+
+  #ramka{display:block;width:100%;border:0;background:#0E1014;min-height:60dvh}
+  .pusto{padding:70px 28px;text-align:center;color:#8D95A1;font-size:14px;line-height:1.6}
+
+  .start{max-width:440px;margin:0 auto;padding:calc(48px + env(safe-area-inset-top)) 24px 40px;display:flex;flex-direction:column;gap:18px}
+  .start h1{margin:0;font-size:24px;letter-spacing:-.01em}
+  .start p{margin:0;font-size:14px;line-height:1.6;color:#B6BDC8}
+  .start label{font-size:11px;letter-spacing:.12em;font-weight:700;color:#6E7682}
+  .pole{width:100%;padding:14px;border-radius:12px;border:1px solid #2A2F38;background:#14171D;color:#F2F4F7;font:15px ui-monospace,Menlo,Consolas,monospace}
+  .pole:focus{outline:2px solid #4FC3D4;outline-offset:1px}
+  .glowny{padding:15px;border:0;border-radius:12px;background:#4FC3D4;color:#06262B;font-weight:700;font-size:15px}
+  .glowny:disabled{opacity:.5}
+  .blad{color:#E8A33D;font-size:13.5px;line-height:1.5}
+
+  dialog{border:1px solid #23272F;border-radius:18px;background:#14171D;color:#F2F4F7;padding:22px;width:min(92vw,400px)}
+  dialog::backdrop{background:rgba(0,0,0,.6)}
+  dialog h2{margin:0 0 14px;font-size:17px}
+  dialog p{margin:0 0 14px;font-size:13px;line-height:1.55;color:#B6BDC8;overflow-wrap:anywhere}
+  .rzad{display:flex;flex-direction:column;gap:10px}
+  .drugi{padding:13px;border-radius:12px;border:1px solid #2A2F38;background:#181B22;font-size:14px;font-weight:600}
+  .drugi.groz{color:#E8A33D}
+</style>
+</head>
+<body>
+
+<!-- Pierwsze uruchomienie: podanie tokenu -->
+<main id="ekran-token" class="start" hidden>
+  <h1>Poranny brief</h1>
+  <p>Raport leży w Twoim prywatnym repozytorium. Żeby telefon mógł go odczytać, wklej tu token dostępu — jednorazowo. Zostaje wyłącznie w pamięci tej aplikacji na tym telefonie.</p>
+  <label for="token">TOKEN GITHUB (TYLKO ODCZYT)</label>
+  <input id="token" class="pole" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_…">
+  <div id="token-blad" class="blad" role="alert" hidden></div>
+  <button id="token-zapisz" class="glowny">Zapisz i pokaż brief</button>
+</main>
+
+<!-- Zwykły widok: raport -->
+<div id="ekran-brief" hidden>
+  <header class="pasek">
+    <div class="tyt">
+      <b>Poranny brief</b>
+      <small id="stan">—</small>
+    </div>
+    <button id="odswiez" class="ik" aria-label="Odśwież">
+      <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+    </button>
+    <button id="ustawienia" class="ik" aria-label="Ustawienia">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg>
+    </button>
+  </header>
+  <iframe id="ramka" title="Raport" sandbox="allow-same-origin" hidden></iframe>
+  <div id="pusto" class="pusto" hidden></div>
+</div>
+
+<dialog id="okno">
+  <h2>Ustawienia</h2>
+  <p id="okno-opis"></p>
+  <div class="rzad">
+    <button id="zmien-token" class="drugi">Zmień token</button>
+    <button id="wyloguj" class="drugi groz">Usuń token i dane z tego telefonu</button>
+    <button id="zamknij" class="drugi">Zamknij</button>
+  </div>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
