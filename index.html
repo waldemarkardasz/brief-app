@@ -38,14 +38,6 @@
   .dni span::first-letter{text-transform:uppercase}
   .dni .ik{width:44px;height:40px}
   .dni .ik:disabled{opacity:.22}
-  .kom{padding:10px 20px 4px;display:flex;flex-direction:column;gap:8px;max-width:520px;margin:0 auto}
-  .kom-btn{align-self:flex-start;padding:9px 14px;border-radius:999px;border:1px solid #2A2F38;background:#14171D;color:#C9CED6;font-size:13px;font-weight:600}
-  .kom-btn:active{background:#1B1F26}
-  .kom-tekst{font:14px/1.5 Inter,system-ui,sans-serif;resize:vertical;min-height:84px}
-  .kom-rzad{display:flex;gap:10px;margin-top:8px}
-  .kom-rzad button{flex:1;padding:12px}
-  .kom-zap{font-size:13px;line-height:1.5;color:#B6BDC8;background:#14171D;border:1px solid #23272F;border-radius:12px;padding:11px 13px;white-space:pre-wrap}
-  .kom-zap b{display:block;font-size:10.5px;letter-spacing:.1em;color:#6E7682;margin-bottom:4px}
   #ramka{display:block;width:100%;border:0;background:#0E1014;min-height:60dvh}
   .pusto{padding:70px 28px;text-align:center;color:#8D95A1;font-size:14px;line-height:1.6}
 
@@ -99,18 +91,6 @@
     <span id="ktory-dzien">—</span>
     <button id="naprzod" class="ik" aria-label="Dzień później"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
   </nav>
-  <section class="kom" aria-label="Komentarz do nocy">
-    <div id="kom-zapisane" class="kom-zap" hidden></div>
-    <button id="kom-otworz" class="kom-btn">Dodaj komentarz do nocy</button>
-    <div id="kom-pole" hidden>
-      <textarea id="kom-tekst" class="pole kom-tekst" rows="3" maxlength="1000" placeholder="Jak minęła noc? Np. budziłem się dwa razy, rano ciężka głowa."></textarea>
-      <div id="kom-blad" class="blad" role="alert" hidden></div>
-      <div class="kom-rzad">
-        <button id="kom-anuluj" class="drugi">Anuluj</button>
-        <button id="kom-zapisz" class="glowny">Zapisz</button>
-      </div>
-    </div>
-  </section>
   <iframe id="ramka" title="Raport" sandbox="allow-same-origin" hidden></iframe>
   <div id="pusto" class="pusto" hidden></div>
 </div>

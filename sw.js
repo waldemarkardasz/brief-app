@@ -1,7 +1,7 @@
 /* Service worker: trzyma w telefonie samą powłokę aplikacji.
  * Raportu nie dotyka — zapytania do GitHuba przechodzą obok niego,
  * a ostatni raport aplikacja przechowuje sama. */
-const PAMIEC = 'brief-powloka-v4';
+const PAMIEC = 'brief-powloka-v5';
 const POWLOKA = ['./', './index.html', './app.js', './manifest.webmanifest', './ikona-192.png', './ikona-512.png'];
 
 self.addEventListener('install', (e) => {

@@ -12,7 +12,7 @@
 const API = 'https://api.github.com';
 const REPO = 'waldemarkardasz/garmin-brief';
 const KATALOG = 'karty';
-const WERSJA = '1.2';
+const WERSJA = '1.3';
 const STREFA = 'Europe/Warsaw';
 const ILE_W_PAMIECI = 45;
 const K = { token: 'brief.token', dni: 'brief.dni', karta: 'brief.karta.', kom: 'brief.kom.' };
@@ -67,37 +67,33 @@ function ladnaData(iso) {
   return d.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
-/* ---------- komentarz do nocy ---------- */
+/* ---------- komentarze: do nocy i po treningu ----------
+ * Pola komentarzy są wstawiane w środek raportu, w miejscach oznaczonych
+ * w karcie atrybutem data-komentarz. Raport sam niczego nie wykonuje —
+ * przyciski obsługuje ten plik.
+ */
 
-function komentarze(data) {
-  try { return JSON.parse(pamiec(K.kom + data) || '[]'); } catch (e) { return []; }
+const RODZAJE = {
+  noc: {
+    tytul: 'TWÓJ KOMENTARZ DO NOCY', dodaj: 'Dodaj komentarz do nocy',
+    podpowiedz: 'Jak minęła noc? Np. budziłem się dwa razy, rano ciężka głowa.',
+  },
+  trening: {
+    tytul: 'TWÓJ KOMENTARZ PO TRENINGU', dodaj: 'Dodaj komentarz po treningu',
+    podpowiedz: 'Jak poszedł trening? Np. nogi ciężkie, ostatnie powtórzenie na granicy.',
+  },
+};
+
+function komentarze(rodzaj, data) {
+  try {
+    const nowe = JSON.parse(pamiec(`${K.kom}${rodzaj}.${data}`) || '[]');
+    // Wpisy do nocy z wersji 1.2 leżały pod kluczem bez rodzaju.
+    const stare = rodzaj === 'noc' ? JSON.parse(pamiec(K.kom + data) || '[]') : [];
+    return stare.concat(nowe);
+  } catch (e) { return []; }
 }
 
-function odswiezKomentarz() {
-  const lista = biezacy ? komentarze(biezacy) : [];
-  const pole = $('kom-zapisane');
-  pole.hidden = !lista.length;
-  pole.textContent = '';
-  if (lista.length) {
-    const b = document.createElement('b');
-    b.textContent = 'TWÓJ KOMENTARZ DO NOCY';
-    pole.appendChild(b);
-    pole.appendChild(document.createTextNode(lista.join('\n')));
-  }
-  $('kom-otworz').textContent = lista.length ? 'Dopisz do komentarza' : 'Dodaj komentarz do nocy';
-  $('kom-otworz').hidden = !biezacy;
-  $('kom-pole').hidden = true;
-}
-
-async function zapiszKomentarz() {
-  const tekst = $('kom-tekst').value.trim();
-  if (!tekst || !biezacy) return;
-  const dzien = biezacy;
-  const blad = $('kom-blad');
-  const przycisk = $('kom-zapisz');
-  blad.hidden = true;
-  przycisk.disabled = true;
-  przycisk.textContent = 'Zapisuję…';
+async function wyslijKomentarz(rodzaj, data, tekst) {
   try {
     // Komentarz idzie jako zgłoszenie w prywatnym repozytorium; stamtąd
     // automat dopisuje go do notatek, które czyta poranna sesja.
@@ -109,30 +105,105 @@ async function zapiszKomentarz() {
         'Content-Type': 'application/json',
         'X-GitHub-Api-Version': '2022-11-28',
       },
-      body: JSON.stringify({ title: `noc ${dzien}`, body: tekst }),
+      body: JSON.stringify({ title: `${rodzaj} ${data}`, body: tekst }),
     });
     if (odp.status === 201) {
-      const lista = komentarze(dzien);
+      const klucz = `${K.kom}${rodzaj}.${data}`;
+      let lista = [];
+      try { lista = JSON.parse(pamiec(klucz) || '[]'); } catch (e) { lista = []; }
       lista.push(tekst);
-      pamiec(K.kom + dzien, JSON.stringify(lista));
-      $('kom-tekst').value = '';
-      odswiezKomentarz();
-    } else if (odp.status === 401) {
-      blad.textContent = 'Token wygasł albo jest błędny. Wklej nowy w ustawieniach.';
-      blad.hidden = false;
-    } else if (odp.status === 403 || odp.status === 404 || odp.status === 410) {
-      blad.textContent = 'Token nie ma prawa do komentarzy. W GitHubie dodaj mu uprawnienie „Issues: Read and write" dla garmin-brief.';
-      blad.hidden = false;
-    } else {
-      blad.textContent = `Nie udało się zapisać (błąd ${odp.status}). Spróbuj ponownie.`;
-      blad.hidden = false;
+      pamiec(klucz, JSON.stringify(lista));
+      return null;
     }
+    if (odp.status === 401) return 'Token wygasł albo jest błędny. Wklej nowy w ustawieniach.';
+    if ([403, 404, 410].includes(odp.status)) {
+      return 'Token nie ma prawa do komentarzy. W GitHubie dodaj mu uprawnienie „Issues: Read and write" dla garmin-brief.';
+    }
+    return `Nie udało się zapisać (błąd ${odp.status}). Spróbuj ponownie.`;
   } catch (e) {
-    blad.textContent = 'Brak połączenia. Komentarz nie został zapisany — spróbuj ponownie.';
-    blad.hidden = false;
-  } finally {
-    przycisk.disabled = false;
-    przycisk.textContent = 'Zapisz';
+    return 'Brak połączenia. Komentarz nie został zapisany — spróbuj ponownie.';
+  }
+}
+
+function el(dok, znacznik, styl, tekst) {
+  const e = dok.createElement(znacznik);
+  if (styl) e.style.cssText = styl;
+  if (tekst !== undefined) e.textContent = tekst;
+  return e;
+}
+
+const STYL = {
+  ramka: 'display:flex;flex-direction:column;gap:9px',
+  zapis: 'background:#14171D;border:1px solid #23272F;border-radius:14px;padding:13px 15px;display:flex;flex-direction:column;gap:5px',
+  etykieta: 'font-size:10px;letter-spacing:.1em;font-weight:700;color:#6E7682',
+  tresc: 'font-size:13.5px;line-height:1.5;color:#C9CED6;white-space:pre-wrap',
+  pastylka: 'align-self:flex-start;padding:9px 15px;border-radius:999px;border:1px solid #2A2F38;background:#14171D;color:#C9CED6;font:600 13px Inter,system-ui,sans-serif;cursor:pointer',
+  pole: 'width:100%;box-sizing:border-box;min-height:88px;padding:13px;border-radius:12px;border:1px solid #2A2F38;background:#14171D;color:#F2F4F7;font:14px/1.5 Inter,system-ui,sans-serif;resize:vertical',
+  rzad: 'display:flex;gap:10px',
+  anuluj: 'flex:1;padding:12px;border-radius:12px;border:1px solid #2A2F38;background:#181B22;color:#F2F4F7;font:600 14px Inter,system-ui,sans-serif;cursor:pointer',
+  zapisz: 'flex:1;padding:12px;border-radius:12px;border:0;background:#4FC3D4;color:#06262B;font:700 14px Inter,system-ui,sans-serif;cursor:pointer',
+  blad: 'color:#E8A33D;font-size:13px;line-height:1.5',
+};
+
+function zbudujKomentarz(dok, kotwica, rodzaj, data, otwarte, blad, szkic) {
+  const opis = RODZAJE[rodzaj];
+  kotwica.textContent = '';
+  const ramka = el(dok, 'div', STYL.ramka);
+  const lista = komentarze(rodzaj, data);
+  if (lista.length) {
+    const zapis = el(dok, 'div', STYL.zapis);
+    zapis.appendChild(el(dok, 'span', STYL.etykieta, opis.tytul));
+    zapis.appendChild(el(dok, 'span', STYL.tresc, lista.join('\n')));
+    ramka.appendChild(zapis);
+  }
+  if (!otwarte) {
+    const przycisk = el(dok, 'button', STYL.pastylka, lista.length ? 'Dopisz do komentarza' : opis.dodaj);
+    przycisk.type = 'button';
+    przycisk.dataset.rola = 'otworz-' + rodzaj;
+    przycisk.addEventListener('click', () => {
+      zbudujKomentarz(dok, kotwica, rodzaj, data, true);
+      const pole = kotwica.querySelector('textarea');
+      if (pole) pole.focus();
+    });
+    ramka.appendChild(przycisk);
+  } else {
+    const pole = el(dok, 'textarea', STYL.pole);
+    pole.maxLength = 1000;
+    pole.placeholder = opis.podpowiedz;
+    pole.value = szkic || '';
+    ramka.appendChild(pole);
+    if (blad) ramka.appendChild(el(dok, 'div', STYL.blad, blad));
+    const rzad = el(dok, 'div', STYL.rzad);
+    const anuluj = el(dok, 'button', STYL.anuluj, 'Anuluj');
+    const zapisz = el(dok, 'button', STYL.zapisz, 'Zapisz');
+    anuluj.type = zapisz.type = 'button';
+    anuluj.addEventListener('click', () => zbudujKomentarz(dok, kotwica, rodzaj, data, false));
+    zapisz.addEventListener('click', async () => {
+      const tekst = pole.value.trim();
+      if (!tekst) return;
+      zapisz.disabled = true;
+      zapisz.textContent = 'Zapisuję…';
+      const wynik = await wyslijKomentarz(rodzaj, data, tekst);
+      zbudujKomentarz(dok, kotwica, rodzaj, data, !!wynik, wynik, wynik ? tekst : '');
+    });
+    rzad.appendChild(anuluj);
+    rzad.appendChild(zapisz);
+    ramka.appendChild(rzad);
+  }
+  kotwica.appendChild(ramka);
+}
+
+function wstawKomentarze(dok, data) {
+  for (const rodzaj of Object.keys(RODZAJE)) {
+    let kotwica = dok.querySelector(`[data-komentarz="${rodzaj}"]`);
+    if (!kotwica) {
+      // Starsze raporty nie mają wyznaczonych miejsc — pola lądują na końcu.
+      const rodzic = dok.querySelector('.k') || dok.body;
+      kotwica = el(dok, 'div');
+      kotwica.dataset.komentarz = rodzaj;
+      rodzic.appendChild(kotwica);
+    }
+    zbudujKomentarz(dok, kotwica, rodzaj, data, false);
   }
 }
 
@@ -141,7 +212,6 @@ function odswiezNawigacje() {
   $('wstecz').disabled = i <= 0;
   $('naprzod').disabled = i < 0 || i >= dni.length - 1;
   $('ktory-dzien').textContent = biezacy ? ladnaData(biezacy) : '—';
-  odswiezKomentarz();
   if (!biezacy) return;
   if (biezacy === dzisIso()) ustawStan('dzisiejszy');
   else if (i === dni.length - 1) ustawStan('dzisiejszy jeszcze nie gotowy', true);
@@ -173,6 +243,7 @@ function pokazKarte(html) {
     if (dok.fonts && dok.fonts.ready) dok.fonts.ready.then(dopasujRamke);
     // Przesunięcia palcem łapiemy także wewnątrz raportu.
     podepnijGesty(dok);
+    if (biezacy) wstawKomentarze(dok, biezacy);
   };
   ramka.srcdoc = html;
 }
@@ -332,15 +403,6 @@ $('odswiez').addEventListener('click', () => odswiez());
 $('wstecz').addEventListener('click', () => przesun(-1));
 $('naprzod').addEventListener('click', () => przesun(1));
 podepnijGesty(document);
-
-$('kom-otworz').addEventListener('click', () => {
-  $('kom-pole').hidden = false;
-  $('kom-otworz').hidden = true;
-  $('kom-blad').hidden = true;
-  $('kom-tekst').focus();
-});
-$('kom-anuluj').addEventListener('click', odswiezKomentarz);
-$('kom-zapisz').addEventListener('click', zapiszKomentarz);
 
 $('ustawienia').addEventListener('click', () => {
   $('okno-opis').textContent =
